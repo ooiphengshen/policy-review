@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Client Policy Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* Layout: entry form on the left, live review on the right; stacks on narrow screens. Same palette as the generated reviews. */
+:root{--ink:#1d2433;--muted:#5f6b7d;--line:#dfe3ea;--bg:#f6f7f9;--card:#fff;--soft:#eef3f4;--brand:#0f5c63;--hi:#b42318;--med:#b54708;--ok:#067647;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#e7eaf0;--muted:#9aa5b5;--line:#2c3443;--bg:#12161d;--card:#1a2029;--soft:#202833;--brand:#5cc3c9;--hi:#f97066;--med:#fdb022;--ok:#47cd89;color-scheme:dark}}
+:root[data-theme="dark"]{--ink:#e7eaf0;--muted:#9aa5b5;--line:#2c3443;--bg:#12161d;--card:#1a2029;--soft:#202833;--brand:#5cc3c9;--hi:#f97066;--med:#fdb022;--ok:#47cd89;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif}
+.top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--card)}
+.top h1{font-size:17px;margin:0 auto 0 0}
+.wrap{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:20px;padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1500px;margin:0 auto}
+@media (max-width:980px){.wrap{grid-template-columns:minmax(0,1fr)}}
+.wrap>*{min-width:0}
+fieldset{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:14px;margin:0 0 14px}
+legend{font-weight:700;color:var(--brand);padding:0 6px}
+label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%;min-width:0}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+input.bad{border-color:var(--hi);background:color-mix(in srgb,var(--hi) 8%,var(--bg))}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.grid .full{grid-column:1/-1}
+.pol{border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 12px;background:var(--soft)}
+.pol h3{margin:0 0 10px;font-size:14px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ben{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) minmax(0,1fr) auto;gap:6px;align-items:end;margin-top:6px}
+.ben .chk{display:flex;gap:4px;align-items:center;font-size:12px;white-space:nowrap}.ben .chk input{width:auto}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+button.link{border:0;background:none;color:var(--brand);padding:4px 0}button.x{border:0;background:none;color:var(--hi);padding:2px 6px}
+.status{font-size:12.5px;color:var(--muted)}
+/* Report */
+.report{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:18px}
+.report>*{min-width:0}
+.draft{background:var(--med);color:#fff;padding:5px 12px;border-radius:6px;font-weight:600;justify-self:start}
+.report h2{margin:0;font-size:22px}.report h4{margin:0 0 8px;font-size:15px;color:var(--brand)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:12px}.tile b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.tile span{color:var(--muted);font-size:12.5px}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+td.num,th.num{text-align:right}tr.off td{color:var(--muted);text-decoration:line-through}
+.pill{padding:1px 8px;border-radius:99px;font-size:11.5px;font-weight:600;border:1px solid currentColor}.p-in{color:var(--ok)}
+ul{margin:0;padding-left:20px}li.high{color:var(--hi)}li.medium{color:var(--med)}
+.totals{border:2px solid var(--brand);border-radius:10px;padding:14px}.muted{color:var(--muted)}.small{font-size:12px}
+pre.wa{white-space:pre-wrap;background:var(--soft);border-radius:8px;padding:12px;margin:0;font:13px/1.5 -apple-system,sans-serif}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px}
+@media print{.top,.entry,.noprint{display:none!important}.wrap{display:block;padding:0}.report{border:0;padding:0}body{background:#fff;color:#000}.scroll{overflow:visible}th,td{white-space:normal}}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Policy Review — Manual Entry</h1>
+  <select id="saved" aria-label="Saved clients"></select>
+  <button id="btnNew">New client</button>
+  <button id="btnExample">Load example</button>
+  <button id="btnBackup">Backup all</button>
+  <label class="noprint" style="display:inline-flex"><input id="restore" type="file" accept=".json" hidden><button id="btnRestore" type="button">Restore backup</button></label>
+</div>
+
+<div class="wrap">
+  <form class="entry" id="form" autocomplete="off" onsubmit="return false">
+    <fieldset>
+      <legend>Client</legend>
+      <div class="grid">
+        <label class="full">Policyholder name<input id="c_name" data-k="name" placeholder="As in ePartner, e.g. TAN AH KOW"></label>
+        <label>Date of birth<input id="c_dob" data-k="dob" placeholder="DD/MM/YYYY"></label>
+        <label>Review date<input id="c_date" data-k="reviewDate" placeholder="DD/MM/YYYY"></label>
+        <label class="full">Greeting name for WhatsApp<input id="c_greet" data-k="greet" placeholder="e.g. Ah Kow / Mr Tan"></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Policies</legend>
+      <div id="policies"></div>
+      <button type="button" id="btnAddPol">+ Add policy</button>
+    </fieldset>
+    <fieldset>
+      <legend>Adviser notes</legend>
+      <textarea id="c_notes" data-k="notes" rows="3" placeholder="Shown on the review under Review discussion"></textarea>
+    </fieldset>
+  </form>
+
+  <div>
+    <div class="noprint" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center">
+      <button class="primary" id="btnApprove">Approve review</button>
+      <button id="btnPdf">Download PDF</button>
+      <button id="btnXlsx">Download Excel</button>
+      <button id="btnWa">Copy WhatsApp text</button>
+      <span class="status" id="saveStatus"></span>
+    </div>
+    <div class="report" id="report"></div>
+    <div class="report noprint" style="margin-top:16px"><h4 style="margin:0;color:var(--brand)">WhatsApp text</h4><pre class="wa" id="waText"></pre></div>
+  </div>
+</div>
+
+<script>
+const TYPES = ['Life cover', 'Critical illness', 'Income benefit', 'Accident', 'Other rider', 'Medical card', 'Hospital benefit', 'Premium waiver'];
+const SUMMABLE = new Set(['Life cover', 'Critical illness', 'Income benefit', 'Accident', 'Other rider']);
+const MODES = { Monthly: 12, Quarterly: 4, 'Half-Yearly': 2, Yearly: 1, 'Fully paid': 0, Single: 0 };
+const ADVISER = 'Ooi Pheng Shen, Unit Manager, G PLUS Advisory Sdn Bhd';
+const STORE = 'policyReviewManual.v1';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const money = n => 'RM ' + Number(n).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
+function parseDate(s) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((s || '').trim());
+  if (!m) return null;
+  const d = new Date(+m[3], +m[2] - 1, +m[1]);
+  return d.getDate() === +m[1] && d.getMonth() === +m[2] - 1 ? d : null;
+}
+function parseNum(s) { if (s == null || String(s).trim() === '') return null; const n = Number(String(s).replace(/[,\sRM]/gi, '')); return Number.isFinite(n) && n >= 0 ? n : NaN; }
+const age = (dob, at) => at.getFullYear() - dob.getFullYear() - ((at.getMonth() < dob.getMonth() || (at.getMonth() === dob.getMonth() && at.getDate() < dob.getDate())) ? 1 : 0);
+
+// ---------- state & storage ----------
+const blankPolicy = () => ({ policyNo: '', plan: '', lifeAssured: '', status: 'In force', commenced: '', premium: '', mode: 'Monthly', method: '', nextDue: '', nominee: '', benefits: [blankBenefit('Life cover')] });
+function blankBenefit(type) { return { name: '', type: type || 'Life cover', sa: '', coverEnd: '', inforce: true }; }
+const blankClient = () => ({ id: 'c' + Date.now(), name: '', dob: '', reviewDate: todayStr(), greet: '', notes: '', approved: false, policies: [blankPolicy()] });
+
+function exampleClient() {
+  return { id: 'example', name: 'EXAMPLE – TAN MEI LING', dob: '14/03/1988', reviewDate: todayStr(), greet: 'Mei Ling', notes: 'Example data only — not a real client.', approved: false, policies: [
+    { policyNo: '1000000001', plan: 'Example Protection Plan', lifeAssured: 'TAN MEI LING', status: 'In force', commenced: '15/01/2019', premium: '250.00', mode: 'Monthly', method: 'Credit Card', nextDue: '15/11/2026', nominee: 'Husband – LIM WEI JIE',
+      benefits: [{ name: 'Basic plan', type: 'Life cover', sa: '300,000', coverEnd: '14/01/2069', inforce: true }, { name: 'Critical illness rider', type: 'Critical illness', sa: '100,000', coverEnd: '14/01/2069', inforce: true }, { name: 'Medical rider', type: 'Medical card', sa: '200', coverEnd: '14/01/2069', inforce: true }] },
+    { policyNo: '1000000002', plan: 'Example Junior Medical', lifeAssured: 'LIM YU XUAN', status: 'In force', commenced: '01/06/2024', premium: '90.00', mode: 'Monthly', method: 'Credit Card', nextDue: '01/11/2026', nominee: '',
+      benefits: [{ name: 'Medical card', type: 'Medical card', sa: '150', coverEnd: '31/05/2027', inforce: true }] },
+  ] };
+}
+
+let db = { current: null, clients: {} };
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && s.clients) db = s; } catch (e) {}
+  if (!db.current || !db.clients[db.current]) { const c = exampleClient(); db.clients[c.id] = c; db.current = c.id; }
+  // In-force policies only: drop any lapsed / terminated / not-issued policies saved by an earlier version
+  for (const c of Object.values(db.clients)) {
+    c.policies = c.policies.filter(p => !p.status || p.status === 'In force');
+    if (!c.policies.length) c.policies = [blankPolicy()];
+  }
+}
+let saveTimer;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(STORE, JSON.stringify(db)); $('#saveStatus').textContent = 'Saved on this device ' + new Date().toLocaleTimeString(); }
+    catch (e) { $('#saveStatus').textContent = 'Could not save in this browser. Use Backup all to keep a copy.'; }
+  }, 300);
+}
+const cur = () => db.clients[db.current];
+
+// ---------- form ----------
+function renderSaved() {
+  const sel = $('#saved');
+  sel.innerHTML = Object.values(db.clients).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    .map(c => `<option value="${esc(c.id)}"${c.id === db.current ? ' selected' : ''}>${esc(c.name || '(unnamed client)')}${c.approved ? ' ✓' : ''}</option>`).join('');
+}
+
+function renderForm() {
+  const c = cur();
+  for (const el of document.querySelectorAll('#form [data-k]')) el.value = c[el.dataset.k] || '';
+  $('#policies').innerHTML = c.policies.map((p, i) => `
+    <div class="pol" data-i="${i}">
+      <h3><span>Policy ${i + 1}</span><button type="button" class="x" data-del-pol="${i}" aria-label="Remove policy ${i + 1}">Remove</button></h3>
+      <div class="grid">
+        <label>Policy no.<input id="p${i}_policyNo" data-p="policyNo" value="${esc(p.policyNo)}"></label>
+        <label>Plan name<input id="p${i}_plan" data-p="plan" value="${esc(p.plan)}"></label>
+        <label>Life assured<input id="p${i}_la" data-p="lifeAssured" value="${esc(p.lifeAssured)}" placeholder="Blank = policyholder"></label>
+        <label>Commencement<input id="p${i}_comm" data-p="commenced" value="${esc(p.commenced)}" placeholder="DD/MM/YYYY"></label>
+        <label>Next due date<input id="p${i}_due" data-p="nextDue" value="${esc(p.nextDue)}" placeholder="DD/MM/YYYY"></label>
+        <label>Premium (RM)<input id="p${i}_prem" data-p="premium" value="${esc(p.premium)}" inputmode="decimal"></label>
+        <label>Mode<select id="p${i}_mode" data-p="mode">${Object.keys(MODES).map(m => `<option${m === p.mode ? ' selected' : ''}>${m}</option>`).join('')}</select></label>
+        <label>Payment method<input id="p${i}_method" data-p="method" value="${esc(p.method)}" placeholder="Credit Card / GIRO / Bank's order"></label>
+        <label>Nominee<input id="p${i}_nom" data-p="nominee" value="${esc(p.nominee)}" placeholder="e.g. Wife – NAME"></label>
+      </div>
+      <div style="margin-top:10px;font-size:12.5px;color:var(--muted)">Benefits (sum assured for life / CI; plan level for medical; RM waived for waiver)</div>
+      ${p.benefits.map((b, j) => `
+        <div class="ben" data-j="${j}">
+          <label>Benefit<input id="p${i}b${j}_name" data-b="name" value="${esc(b.name)}" placeholder="e.g. Basic plan / CI rider"></label>
+          <label>Type<select id="p${i}b${j}_type" data-b="type">${TYPES.map(t => `<option${t === b.type ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label>Sum assured<input id="p${i}b${j}_sa" data-b="sa" value="${esc(b.sa)}" inputmode="decimal"></label>
+          <div style="display:grid;gap:2px"><span class="chk"><input id="p${i}b${j}_in" type="checkbox" data-b="inforce"${b.inforce ? ' checked' : ''}>In force</span><button type="button" class="x" data-del-ben="${i}:${j}" aria-label="Remove benefit">Remove</button></div>
+        </div>`).join('')}
+      <button type="button" class="link" data-add-ben="${i}">+ Add benefit</button>
+    </div>`).join('');
+}
+
+$('#form').addEventListener('input', e => {
+  const c = cur(), t = e.target;
+  if (t.dataset.k) c[t.dataset.k] = t.value;
+  const pol = t.closest('.pol');
+  if (pol) {
+    const p = c.policies[+pol.dataset.i];
+    if (t.dataset.p) p[t.dataset.p] = t.value;
+    const ben = t.closest('.ben');
+    if (ben && t.dataset.b) p.benefits[+ben.dataset.j][t.dataset.b] = t.type === 'checkbox' ? t.checked : t.value;
+  }
+  c.approved = false;
+  update();
+});
+$('#form').addEventListener('click', e => {
+  const c = cur(), d = e.target.dataset;
+  if (d.delPol != null) { if (c.policies.length > 1) c.policies.splice(+d.delPol, 1); else c.policies = [blankPolicy()]; }
+  else if (d.addBen != null) c.policies[+d.addBen].benefits.push(blankBenefit('Critical illness'));
+  else if (d.delBen != null) { const [i, j] = d.delBen.split(':').map(Number); c.policies[i].benefits.splice(j, 1); }
+  else return;
+  c.approved = false; renderForm(); update();
+});
+$('#btnAddPol').onclick = () => { cur().policies.push(blankPolicy()); cur().approved = false; renderForm(); update(); };
+
+// ---------- review ----------
+function compute(c) {
+  const issues = [], bad = new Set();
+  const at = parseDate(c.reviewDate) || new Date();
+  if (!c.name.trim()) { issues.push('Policyholder name is empty'); bad.add('c_name'); }
+  const dob = c.dob ? parseDate(c.dob) : null;
+  if (c.dob && !dob) { issues.push(`Date of birth "${c.dob}" is not DD/MM/YYYY — age not shown`); bad.add('c_dob'); }
+  if (c.reviewDate && !parseDate(c.reviewDate)) { issues.push(`Review date "${c.reviewDate}" is not DD/MM/YYYY — today used`); bad.add('c_date'); }
+  const seen = new Set();
+  const pols = c.policies.map((p, i) => {
+    const tag = p.policyNo || `Policy ${i + 1}`;
+    if (!p.policyNo.trim()) { issues.push(`${tag}: policy number is empty`); bad.add(`p${i}_policyNo`); }
+    else if (seen.has(p.policyNo.trim())) { issues.push(`${tag}: entered twice`); bad.add(`p${i}_policyNo`); }
+    seen.add(p.policyNo.trim());
+    const prem = parseNum(p.premium);
+    if (Number.isNaN(prem)) { issues.push(`${tag}: premium "${p.premium}" is not a number — left out`); bad.add(`p${i}_prem`); }
+    const due = p.nextDue ? parseDate(p.nextDue) : null;
+    if (p.nextDue && !due) { issues.push(`${tag}: next due date "${p.nextDue}" is not DD/MM/YYYY`); bad.add(`p${i}_due`); }
+    if (p.commenced && !parseDate(p.commenced)) { issues.push(`${tag}: commencement "${p.commenced}" is not DD/MM/YYYY`); bad.add(`p${i}_comm`); }
+    const premium = Number.isNaN(prem) ? null : prem;
+    const inforce = p.status === 'In force';
+    const annual = inforce && premium != null ? premium * MODES[p.mode] : 0;
+    const benefits = p.benefits.map((b, j) => {
+      const sa = parseNum(b.sa);
+      if (Number.isNaN(sa)) { issues.push(`${tag}: sum assured "${b.sa}" for ${b.name || 'a benefit'} is not a number — left out`); bad.add(`p${i}b${j}_sa`); }
+      if (!b.name.trim() && sa != null) issues.push(`${tag}: a benefit has no name`);
+      return { ...b, sa: Number.isNaN(sa) ? null : sa, counted: inforce && b.inforce };
+    }).filter(b => b.name.trim() || b.sa != null);
+    if (inforce && !benefits.length) issues.push(`${tag}: in force but no benefits entered — not in coverage totals`);
+    return { ...p, lifeAssured: (p.lifeAssured || c.name).trim().toUpperCase(), premium, annual, due, overdue: inforce && due && due < at, benefits };
+  });
+  const lives = [...new Set(pols.filter(p => p.status === 'In force').map(p => p.lifeAssured))];
+  const totals = TYPES.map(type => {
+    const byLife = {}, levels = {};
+    let total = 0, any = false;
+    for (const p of pols) for (const b of p.benefits) if (b.counted && b.type === type) {
+      any = true;
+      if (SUMMABLE.has(type)) { if (b.sa != null) { byLife[p.lifeAssured] = (byLife[p.lifeAssured] || 0) + b.sa; total += b.sa; } }
+      else (levels[p.lifeAssured] ||= []).push(b.sa == null ? 'Covered' : type === 'Premium waiver' ? money(b.sa) + ' waived' : 'Plan ' + b.sa.toLocaleString('en-MY'));
+    }
+    return any ? { type, summable: SUMMABLE.has(type), byLife, levels, total } : null;
+  }).filter(Boolean);
+  const actions = [];
+  const soon = new Date(at); soon.setDate(soon.getDate() + 30);
+  for (const p of pols) {
+    if (p.overdue) actions.push(['high', `${p.policyNo} — next due date ${p.nextDue} has passed. Check payment.`]);
+    else if (p.status === 'In force' && p.due && p.due <= soon && p.premium != null) actions.push(['info', `${p.policyNo} — premium ${money(p.premium)} due ${p.nextDue}${p.method ? ' (' + p.method + ')' : ''}.`]);
+    if (p.status === 'In force' && !p.nominee.trim()) actions.push(['info', `${p.policyNo} — no nominee entered. Check if one is needed.`]);
+  }
+  return { at, age: dob ? age(dob, at) : null, pols, lives, totals, actions, issues, bad,
+    inforce: pols.filter(p => p.status === 'In force').length, annual: pols.reduce((s, p) => s + p.annual, 0) };
+}
+
+const pillCls = () => 'p-in';
+
+function renderReport(c, r) {
+  const levelCell = (t, l) => t.summable ? (t.byLife[l] ? money(t.byLife[l]) : '—') : (t.levels[l] || ['—']).join(', ');
+  $('#report').innerHTML = `
+    ${c.approved ? '' : '<div class="draft">DRAFT — awaiting your approval</div>'}
+    <div><h2>Policy Review — ${esc(c.name.toUpperCase() || '(client name)')}</h2>
+    <div class="muted">${r.age != null ? `Age ${r.age} · ` : ''}Review date ${esc(c.reviewDate || todayStr())} · entered manually</div></div>
+    <div class="tiles">
+      <div class="tile"><b>${r.inforce}</b><span>Policies in force</span></div>
+      <div class="tile"><b>${money(r.annual)}</b><span>Annualised premium (in force)</span></div>
+      <div class="tile"><b>${r.lives.length}</b><span>Lives covered: ${esc(r.lives.join(', ') || '—')}</span></div>
+    </div>
+    <div><h4>Action points</h4>${r.actions.length ? `<ul>${r.actions.map(([l, t]) => `<li class="${l}">${esc(t)}</li>`).join('')}</ul>` : '<p class="muted">Nothing overdue or due in the next 30 days.</p>'}</div>
+    <div><h4>Policies</h4><div class="scroll"><table><thead><tr><th>Policy no.</th><th>Plan</th><th>Life assured</th><th>Commenced</th><th class="num">Premium</th><th>Mode</th><th>Method</th><th>Next due</th><th>Nominee</th><th>Status</th></tr></thead><tbody>
+      ${r.pols.map(p => `<tr><td>${esc(p.policyNo)}</td><td>${esc(p.plan)}</td><td>${esc(p.lifeAssured)}</td><td>${esc(p.commenced)}</td><td class="num">${p.premium != null ? money(p.premium) : '—'}</td><td>${esc(p.mode)}</td><td>${esc(p.method)}</td><td>${esc(p.nextDue) || '—'}</td><td>${esc(p.nominee) || '—'}</td><td><span class="pill ${pillCls(p.status)}">${esc(p.status)}</span></td></tr>`).join('')}
+    </tbody></table></div></div>
+    <div><h4>Coverage details by policy</h4>
+      ${r.pols.map(p => `<p style="margin:10px 0 4px"><b>${esc(p.policyNo)}</b> · ${esc(p.plan)} · ${esc(p.lifeAssured)} <span class="pill ${pillCls(p.status)}">${esc(p.status)}</span></p>
+      ${p.benefits.length ? `<div class="scroll"><table><thead><tr><th>Benefit</th><th>Type</th><th class="num">Sum assured</th><th>Counted</th></tr></thead><tbody>
+      ${p.benefits.map(b => `<tr class="${b.counted ? '' : 'off'}"><td>${esc(b.name)}</td><td>${esc(b.type)}</td><td class="num">${b.sa == null ? '—' : SUMMABLE.has(b.type) ? money(b.sa) : b.sa.toLocaleString('en-MY')}</td><td>${b.counted ? (SUMMABLE.has(b.type) ? 'Yes' : 'Shown, not added') : 'No — not in force'}</td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="muted small">No benefits entered.</p>'}`).join('')}
+    </div>
+    <div><h4>Review discussion</h4><p class="muted" style="margin:0">Work · Family · Income · Responsibility · Protection — any changes since the last review?</p>${c.notes ? `<p style="margin:6px 0 0">${esc(c.notes)}</p>` : ''}</div>
+    ${r.issues.length ? `<div class="noprint"><h4>Data checks</h4><ul>${r.issues.map(i => `<li class="medium">${esc(i)}</li>`).join('')}</ul></div>` : ''}
+    <div class="totals"><h4>Total coverage in force</h4>
+      ${r.totals.length ? `<div class="scroll"><table><thead><tr><th>Type</th>${r.lives.map(l => `<th class="num">${esc(l)}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
+      ${r.totals.map(t => `<tr${t.summable ? '' : ' class="muted"'}><td><b>${esc(t.type)}</b></td>${r.lives.map(l => `<td class="num">${esc(levelCell(t, l))}</td>`).join('')}<td class="num"><b>${t.summable ? money(t.total) : 'Not added'}</b></td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="muted">No in-force benefits entered yet.</p>'}
+      <p class="muted small" style="margin:8px 0 0">Only in-force benefits on in-force policies are counted. RM totals add life, critical illness, income, accident and other riders. Medical card and hospital benefit show the plan level; premium waiver shows the amount waived — these are not added. Check how each plan pays out (e.g. CI accelerated or additional).</p>
+    </div>
+    <div class="muted small">Prepared by ${esc(ADVISER)}. For review discussion only; policy terms and current values per insurer records.</div>`;
+}
+
+function whatsapp(c, r) {
+  const mask = n => n ? '••••' + n.slice(-4) : '';
+  const greet = c.greet.trim() || c.name.trim();
+  const inf = r.pols.filter(p => p.status === 'In force');
+  const lines = [`Hi ${greet}, quick summary of your policies with me before our review:`, '', `In force (${inf.length}):`,
+    ...inf.map(p => `• ${mask(p.policyNo)} – ${p.lifeAssured}${p.premium != null ? ` – ${money(p.premium)} ${p.mode.toLowerCase()}` : ''}`)];
+  const att = r.pols.filter(p => p.overdue);
+  if (att.length) lines.push('', 'Needs a quick check:', ...att.map(p => `• ${mask(p.policyNo)} – premium due ${p.nextDue} shows unpaid`));
+  lines.push('', `Total yearly premium: ${money(r.annual)}`);
+  const sum = r.totals.filter(t => t.summable && t.total);
+  const med = r.totals.find(t => t.type === 'Medical card');
+  if (sum.length || med) lines.push('', `Coverage in force${r.lives.length > 1 ? ' (whole family)' : ''}:`, ...sum.map(t => `• ${t.type}: ${money(t.total)}`), ...(med ? [`• Medical card: ${Object.keys(med.levels).join(', ')}`] : []));
+  lines.push('', "When's a good time this week for a 20-min review? I'd like to check if anything has changed – work, family, income – so your coverage still fits.");
+  return lines.join('\n');
+}
+
+let last;
+function update() {
+  const c = cur();
+  last = compute(c);
+  for (const el of document.querySelectorAll('#form input')) el.classList.toggle('bad', last.bad.has(el.id));
+  renderReport(c, last);
+  $('#waText').textContent = whatsapp(c, last);
+  $('#btnApprove').textContent = c.approved ? 'Approved ✓' : 'Approve review';
+  renderSaved();
+  save();
+}
+
+// ---------- actions ----------
+// Files: inside claude.ai use the downloads capability; opened locally, a normal browser download
+async function saveFile(filename, data) {
+  const dl = window.claude?.use ? await window.claude.use('downloads') : null;
+  if (dl) {
+    try { await dl.save({ filename, data }); toast('Saved ' + filename); }
+    catch (e) { toast(e.code === 'declined' ? 'Not saved' : 'Could not save the file here'); }
+    return;
+  }
+  const blob = data instanceof Blob ? data : new Blob([data]);
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const fileName = (c, ext) => `${c.approved ? '' : 'DRAFT_'}Policy_Review_${(c.name || 'client').replace(/[^A-Za-z0-9]+/g, '_')}.${ext}`;
+const toast = msg => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); };
+$('#btnApprove').onclick = () => {
+  if (last.issues.length && !cur().approved) { toast(`Fix the ${last.issues.length} data check(s) first`); return; }
+  cur().approved = !cur().approved; update(); toast(cur().approved ? 'Approved — exports are now final' : 'Back to draft');
+};
+$('#btnPdf').onclick = async () => {
+  if (!window.jspdf) { toast('PDF needs an internet connection the first time'); return; }
+  const c = cur(), r = last, doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const brand = [15, 92, 99], grey = [95, 107, 125];
+  let y = 40;
+  if (!c.approved) { doc.setTextColor(181, 71, 8); doc.setFontSize(10); doc.text('DRAFT - awaiting approval', 40, y); y += 18; }
+  doc.setTextColor(29, 36, 51); doc.setFontSize(18); doc.text('Policy Review - ' + (c.name.toUpperCase() || 'CLIENT'), 40, y); y += 16;
+  doc.setFontSize(9.5); doc.setTextColor(...grey); doc.text(`${r.age != null ? 'Age ' + r.age + ' · ' : ''}Review date ${c.reviewDate || todayStr()}`, 40, y); y += 18;
+  doc.setTextColor(29, 36, 51); doc.setFontSize(11);
+  doc.text(`Policies in force: ${r.inforce}     Annualised premium: ${money(r.annual)}     Lives covered: ${r.lives.join(', ') || '-'}`, 40, y); y += 10;
+  const head = { fillColor: brand, textColor: 255, fontStyle: 'bold' }, num = { halign: 'right' };
+  const table = (title, columns, body, opts = {}) => {
+    if (y > 470) { doc.addPage(); y = 40; }
+    doc.setFontSize(12); doc.setTextColor(...brand); doc.text(title, 40, y + 16);
+    doc.autoTable({ startY: y + 22, head: [columns], body, headStyles: head, styles: { fontSize: 8.5, cellPadding: 4 }, margin: { left: 40, right: 40 }, ...opts });
+    y = doc.lastAutoTable.finalY + 10;
+  };
+  if (r.actions.length) table('Action points', ['Item'], r.actions.map(a => [a[1]]));
+  table('Policies', ['Policy no.', 'Plan', 'Life assured', 'Commenced', 'Premium', 'Mode', 'Method', 'Next due', 'Nominee', 'Status'],
+    r.pols.map(p => [p.policyNo, p.plan, p.lifeAssured, p.commenced, p.premium != null ? money(p.premium) : '-', p.mode, p.method, p.nextDue || '-', p.nominee || '-', p.status]), { columnStyles: { 4: num } });
+  table('Coverage details by policy', ['Policy no.', 'Life assured', 'Benefit', 'Type', 'Sum assured', 'Counted'],
+    r.pols.flatMap(p => p.benefits.map(b => [p.policyNo, p.lifeAssured, b.name, b.type, b.sa == null ? '-' : SUMMABLE.has(b.type) ? money(b.sa) : b.sa.toLocaleString('en-MY'), b.counted ? (SUMMABLE.has(b.type) ? 'Yes' : 'Shown, not added') : 'No - not in force'])), { columnStyles: { 4: num } });
+  const levelCell = (t, l) => t.summable ? (t.byLife[l] ? money(t.byLife[l]) : '-') : (t.levels[l] || ['-']).join(', ');
+  table('Total coverage in force', ['Type', ...r.lives, 'Total'], r.totals.map(t => [t.type, ...r.lives.map(l => levelCell(t, l)), t.summable ? money(t.total) : 'Not added']),
+    { columnStyles: Object.fromEntries(r.lives.map((_, i) => [i + 1, num]).concat([[r.lives.length + 1, { halign: 'right', fontStyle: 'bold' }]])) });
+  doc.setFontSize(8); doc.setTextColor(...grey);
+  doc.text(doc.splitTextToSize('Only in-force benefits on in-force policies are counted. RM totals add life, critical illness, income, accident and other riders. Medical card and hospital benefit show the plan level; premium waiver shows the amount waived - not added. Check how each plan pays out (e.g. CI accelerated or additional). Prepared by ' + ADVISER + '.', 760), 40, Math.min(y + 4, 560));
+  await saveFile(fileName(c, 'pdf'), doc.output('blob'));
+};
+$('#btnWa').onclick = async () => {
+  const text = whatsapp(cur(), last);
+  try { await navigator.clipboard.writeText(text); toast('WhatsApp text copied — paste it in WhatsApp'); }
+  catch (e) { const pre = $('#waText'); const sel = getSelection(); const rg = document.createRange(); rg.selectNodeContents(pre); sel.removeAllRanges(); sel.addRange(rg); pre.scrollIntoView({ block: 'center' }); toast('Text selected below — copy it'); }
+};
+$('#btnXlsx').onclick = () => {
+  if (!window.XLSX) { toast('Excel export needs an internet connection the first time'); return; }
+  const c = cur(), r = last, d = c.approved ? '' : ' (DRAFT)';
+  const pol = [['Policy Review — ' + c.name.toUpperCase() + d], ['Review date', c.reviewDate, 'Age', r.age ?? ''], [],
+    ['Policy No.', 'Plan', 'Life Assured', 'Status', 'Commenced', 'Premium (RM)', 'Mode', 'Annualised (RM)', 'Method', 'Next Due', 'Nominee'],
+    ...r.pols.map(p => [p.policyNo, p.plan, p.lifeAssured, p.status, p.commenced, p.premium, p.mode, p.annual || null, p.method, p.nextDue, p.nominee]),
+    [], ['Total annualised premium', '', '', '', '', '', '', r.annual]];
+  const cov = [['Policy No.', 'Life Assured', 'Benefit', 'Type', 'Sum Assured', 'Counted in total?'],
+    ...r.pols.flatMap(p => p.benefits.map(b => [p.policyNo, p.lifeAssured, b.name, b.type, b.sa, b.counted && SUMMABLE.has(b.type) ? 'Yes' : 'No'])),
+    [], ['Total coverage in force'], ['Type', ...r.lives, 'Total'],
+    ...r.totals.map(t => [t.type, ...r.lives.map(l => t.summable ? (t.byLife[l] || null) : (t.levels[l] || []).join(', ')), t.summable ? t.total : 'Not added'])];
+  const wb = XLSX.utils.book_new();
+  const s1 = XLSX.utils.aoa_to_sheet(pol); s1['!cols'] = [14, 26, 22, 12, 12, 13, 11, 15, 14, 12, 26].map(w => ({ wch: w }));
+  const s2 = XLSX.utils.aoa_to_sheet(cov); s2['!cols'] = [14, 22, 30, 16, 15, 16].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, s1, 'Policy Review'); XLSX.utils.book_append_sheet(wb, s2, 'Coverage');
+  saveFile(fileName(c, 'xlsx'), new Uint8Array(XLSX.write(wb, { bookType: 'xlsx', type: 'array' })));
+};
+$('#saved').onchange = e => { db.current = e.target.value; renderForm(); update(); };
+$('#btnNew').onclick = () => { const c = blankClient(); db.clients[c.id] = c; db.current = c.id; renderForm(); update(); $('#c_name').focus(); };
+$('#btnExample').onclick = () => { const c = exampleClient(); db.clients[c.id] = c; db.current = c.id; renderForm(); update(); };
+$('#btnBackup').onclick = () => {
+  saveFile(`policy-review-backup-${todayStr().replace(/\//g, '-')}.json`, JSON.stringify(db, null, 2));
+};
+$('#btnRestore').onclick = () => $('#restore').click();
+$('#restore').onchange = async e => {
+  try { const d = JSON.parse(await e.target.files[0].text()); if (!d.clients) throw 0; Object.assign(db.clients, d.clients); db.current = d.current in db.clients ? d.current : Object.keys(db.clients)[0]; renderForm(); update(); toast('Backup restored'); }
+  catch (err) { toast('That file is not a policy review backup'); }
+};
+
+load(); renderForm(); update();
+</script>
+</body>
+</html>
